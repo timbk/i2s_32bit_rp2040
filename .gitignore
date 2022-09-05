@@ -1,0 +1,6 @@
+.*.swp
+testing/build/
+*.orig
+TODO.txt
+__pycache__/
+testing/flash.sh

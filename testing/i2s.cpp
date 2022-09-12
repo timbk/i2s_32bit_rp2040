@@ -1,9 +1,13 @@
+#include <stdio.h>
+
 #include "i2s.hpp"
 #include "audio_i2s.pio.h" // TODO: check if we need this (maybe assemble it during startup with correct bit-depth))
 
 // TODO: remove this
 const uint dummy_buffer_len = 16;
-uint32_t dummy_buffer[dummy_buffer_len]={0xF3, 0xF3, 0xF3, 0xF3, 0xF3, 0xF3, 0xF3, 0xF3, 0xF3, 0xF3, 0xF3, 0xF3, 0xF3, 0xF3, 0xF3, 0xF3};
+// uint32_t dummy_buffer[dummy_buffer_len]={0xF3, 0xF3, 0xF3, 0xF3, 0xF3, 0xF3, 0xF3, 0xF3, 0xF3, 0xF3, 0xF3, 0xF3, 0xF3, 0xF3, 0xF3, 0xF3};
+// uint32_t dummy_buffer[dummy_buffer_len]={0x00000000, 0x0000340F, 0x00005F1E, 0x000079BB, 0x00007F4B, 0x00006ED9, 0x00004B3B, 0x00001A9C, 0xFFFFE564, 0xFFFFB4C5, 0xFFFF9127, 0xFFFF80B5, 0xFFFF8645, 0xFFFFA0E2, 0xFFFFCBF1, 0x00000000};
+uint32_t dummy_buffer[dummy_buffer_len]={0x00000000, 0x30FBC54C, 0x5A827999, 0x7641AF3B, 0x7FFFFFFF, 0x7641AF3B, 0x5A827999, 0x30FBC54C, 0x00000000, 0xCF043AB4, 0xA57D8667, 0x89BE50C5, 0x80000001, 0x89BE50C5, 0xA57D8667, 0xCF043AB4 };
 
 struct I2S_SETTINGS{
     bool initialized;
@@ -42,11 +46,13 @@ I2S_TX::I2S_TX (
     uint8_t i2s_dma_irq
     ) : I2S_PIO(i2s_pio), I2S_PIO_SM(i2s_pio_sm), I2S_DMA_CHANNEL(i2s_dma_channel), I2S_DMA_IRQ(i2s_dma_irq), BIT_DEPTH(bit_depth),PIN_DATA(pin_data), PIN_CLK_BASE(pin_clock_base) {
 
-    configure_pio(100*256);
+    configure_pio(2500); // correct for 96 kHz 32bit @ 120 MHz system clock, 2 clock steps per bit in PIO
+    configure_dma();
 
     // pass data to DMA hanlder
     i2s_settings.dma_channel = I2S_DMA_CHANNEL;
     i2s_settings.dma_irq = I2S_DMA_IRQ;
+    i2s_settings.initialized = true;
 }
 
 void I2S_TX::set_pio_divider(uint16_t divider) {
@@ -87,6 +93,8 @@ void I2S_TX::configure_dma() {
 }
 
 void I2S_TX::start_i2s() {
+    printf("i2s interrupt started\n");
     pio_sm_set_enabled(I2S_PIO, I2S_PIO_SM, 1);
     irq_set_enabled(DMA_IRQ_0 + I2S_DMA_IRQ, 1);
+    dma_channel_transfer_from_buffer_now(I2S_DMA_CHANNEL, dummy_buffer, dummy_buffer_len);
 }

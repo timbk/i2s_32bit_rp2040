@@ -82,10 +82,10 @@ void I2S_TX::configure_dma() {
     channel_config_set_transfer_data_size(&dma_config, DMA_SIZE_32); // 8, 16 and 32 bit DMAs are possible
     dma_channel_configure(I2S_DMA_CHANNEL,
         &dma_config,
-        &I2S_PIO->txf[I2S_PIO_SM],  // dest
-        NULL, // src
-        0, // count
-        false // trigger
+        &I2S_PIO->txf[I2S_PIO_SM],
+        NULL,
+        0,
+        false
     );
 
     irq_add_shared_handler(DMA_IRQ_0 + I2S_DMA_IRQ, audio_i2s_dma_irq_handler, PICO_SHARED_IRQ_HANDLER_DEFAULT_ORDER_PRIORITY);

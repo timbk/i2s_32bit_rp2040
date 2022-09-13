@@ -1,3 +1,5 @@
+![Build status](https://github.com/timbk/i2s_32bit_rp2040/actions/workflows/build_test.yml/badge.svg)
+
 # i2s_32bit_rp2040
 An up to 32bit I2S library for the RP2040 using PIO
 

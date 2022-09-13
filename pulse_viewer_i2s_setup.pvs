@@ -1,5 +1,5 @@
 [General]
-decode_signals=1
+decode_signals=3
 meta_objs=0
 views=1
 
@@ -49,14 +49,14 @@ name=DOUT
 color=4281623972
 conv_options=0
 conversion_type=0
-enabled=true
+enabled=false
 name=D6
 
 [D7]
 color=4285878395
 conv_options=0
 conversion_type=0
-enabled=true
+enabled=false
 name=D7
 
 [decode_signal0]
@@ -84,6 +84,57 @@ decoders=1
 enabled=true
 name=I\xb2S
 
+[decode_signal1]
+channel0\assigned_signal_name=BCLK
+channel0\initial_pin_state=2
+channel0\name=Data
+channels=1
+color=4286722730
+conv_options=0
+conversion_type=0
+decoder0\ann_class0\visible=true
+decoder0\ann_class1\visible=true
+decoder0\ann_class2\visible=true
+decoder0\id=timing
+decoder0\option0\name=avg_period
+decoder0\option0\type=x
+decoder0\option0\value=@ByteArray(d\0\0\0\0\0\0\0)
+decoder0\option1\name=edge
+decoder0\option1\type=s
+decoder0\option1\value=@ByteArray(rising\0)
+decoder0\options=2
+decoder0\row0\visible=true
+decoder0\row1\visible=true
+decoder0\row2\visible=true
+decoder0\visible=true
+decoders=1
+enabled=true
+name=BCLK freq
+
+[decode_signal2]
+channel0\assigned_signal_name=LRCIN
+channel0\initial_pin_state=2
+channel0\name=Data
+channels=1
+color=4286753330
+conv_options=0
+conversion_type=0
+decoder0\ann_class0\visible=true
+decoder0\ann_class1\visible=true
+decoder0\ann_class2\visible=true
+decoder0\id=timing
+decoder0\option0\name=edge
+decoder0\option0\type=s
+decoder0\option0\value=@ByteArray(rising\0)
+decoder0\options=1
+decoder0\row0\visible=true
+decoder0\row1\visible=true
+decoder0\row2\visible=true
+decoder0\visible=true
+decoders=1
+enabled=true
+name=LRC freq
+
 [view0]
 D0\trace_height=50
 D1\trace_height=50
@@ -93,9 +144,9 @@ D4\trace_height=50
 D5\trace_height=30
 D6\trace_height=30
 D7\trace_height=30
-offset=22 serialization::archive 18 0 0 0 0 406637 91819811 76977523 49362764 51363359 98888850 -8 1 0 6
-scale=7.629885844302597e-05
+offset=22 serialization::archive 18 0 0 0 0 1666 12572875 10323568 52080705 7280916 65473838 -8 0 0 6
+scale=1.613353049645869e-10
 segment_display_mode=1
-splitter_state=@ByteArray(\0\0\0\xff\0\0\0\x1\0\0\0\x2\0\0\0\x65\0\0\a\x16\x1\0\0\0\x1\x1\0\0\0\x1\0)
-v_offset=-217
+splitter_state=@ByteArray(\0\0\0\xff\0\0\0\x1\0\0\0\x2\0\0\0\x65\0\0\x5\xbc\x1\0\0\0\x1\x1\0\0\0\x1\0)
+v_offset=-213
 zero_offset=22 serialization::archive 18 0 0 0 0 0 0 0 0 0 0 0 0 0 6

@@ -9,10 +9,10 @@ WORK IN PROGRESS!
 
 The library in [pico-extras I2S library](https://github.com/raspberrypi/pico-extras/tree/master/src/rp2_common/pico_audio_i2s) was not sufficient for me as it did not include the following features:
 
-* Flexible sample sizes >16 bit
-* I2S receiver
-* Generating an MCLK signal
-* More control for real time applications
+* [x] Flexible sample sizes >16 bit
+* [ ] I2S receiver
+* [ ] Generating an MCLK signal
+* [ ] More control for real time applications
 
 I also did not like the quite complex audio interface implemented in pico-extras. I'm trying to keep this interface simpler and more aimed towards signal generation instead of audio.
 

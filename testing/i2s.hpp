@@ -4,6 +4,8 @@
 #include <hardware/dma.h>
 #include <hardware/clocks.h>
 
+#define I2S_PIO_PROGRAM_LENGTH 8
+
 /**
  * @brief I2S signal generator using PIO
  * This is an I2S transmitter implementation for the RP2040 PIO.
@@ -26,12 +28,23 @@ private:
 
     // status
     uint32_t clock_divider_setting;
+
+    // buffers for PIO code
+    uint16_t i2s_pio_code[I2S_PIO_PROGRAM_LENGTH];
+    struct pio_program i2s_program_header;
+    uint pio_program_offset;
 private:
     /**
      * @brief set up PIO as we need it
      * @param divider clock divider setting, see set_pio_divider() for more
      */
     void configure_pio(uint32_t divider);
+
+    /**
+     * @brief generate PIO program and load it into PIO memory
+     * @return the program offset
+     */
+    uint generate_pio_program();
 
     void configure_dma();
 public:

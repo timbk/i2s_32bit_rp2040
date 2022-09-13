@@ -1,13 +1,46 @@
 #include <stdio.h>
 
 #include "i2s.hpp"
-#include "audio_i2s.pio.h" // TODO: check if we need this (maybe assemble it during startup with correct bit-depth))
 
 // TODO: remove this
-const uint dummy_buffer_len = 16;
-// uint32_t dummy_buffer[dummy_buffer_len]={0xF3, 0xF3, 0xF3, 0xF3, 0xF3, 0xF3, 0xF3, 0xF3, 0xF3, 0xF3, 0xF3, 0xF3, 0xF3, 0xF3, 0xF3, 0xF3};
-// uint32_t dummy_buffer[dummy_buffer_len]={0x00000000, 0x0000340F, 0x00005F1E, 0x000079BB, 0x00007F4B, 0x00006ED9, 0x00004B3B, 0x00001A9C, 0xFFFFE564, 0xFFFFB4C5, 0xFFFF9127, 0xFFFF80B5, 0xFFFF8645, 0xFFFFA0E2, 0xFFFFCBF1, 0x00000000};
-uint32_t dummy_buffer[dummy_buffer_len]={0x00000000, 0x30FBC54C, 0x5A827999, 0x7641AF3B, 0x7FFFFFFF, 0x7641AF3B, 0x5A827999, 0x30FBC54C, 0x00000000, 0xCF043AB4, 0xA57D8667, 0x89BE50C5, 0x80000001, 0x89BE50C5, 0xA57D8667, 0xCF043AB4 };
+const uint dummy_buffer_len = 32;
+/*
+uint32_t dummy_buffer[dummy_buffer_len]={
+    0x00000000, 0x00000000,
+    0x30FBC54C, 0x00000000,
+    0x5A827999, 0x00000000,
+    0x7641AF3B, 0x00000000,
+    0x7FFFFFFF, 0x00000000,
+    0x7641AF3B, 0x00000000,
+    0x5A827999, 0x00000000,
+    0x30FBC54C, 0x00000000,
+    0x00000000, 0x00000000,
+    0xCF043AB4, 0x00000000,
+    0xA57D8667, 0x00000000,
+    0x89BE50C5, 0x00000000,
+    0x80000001, 0x00000000,
+    0x89BE50C5, 0x00000000,
+    0xA57D8667, 0x00000000,
+    0xCF043AB4, 0x00000000,
+};*/
+uint32_t dummy_buffer[dummy_buffer_len]={
+    0x11234567, 0x00000000,
+    0x21234567, 0x00000000,
+    0x31234567, 0x00000000,
+    0x41234567, 0x00000000,
+    0x51234567, 0x00000000,
+    0x61234567, 0x00000000,
+    0x71234567, 0x00000000,
+    0x81234567, 0x00000000,
+    0x91234567, 0x00000000,
+    0xA1234567, 0x00000000,
+    0xB1234567, 0x00000000,
+    0xC1234567, 0x00000000,
+    0xD1234567, 0x00000000,
+    0xE1234567, 0x00000000,
+    0xF1234567, 0x00000000,
+    0x01234567, 0x00000000,
+};
 
 struct I2S_SETTINGS{
     bool initialized;
@@ -67,11 +100,55 @@ float I2S_TX::get_sample_rate() const {
 
 void I2S_TX::configure_pio(uint32_t divider) {
     // load program
-    uint program_offset = pio_add_program(I2S_PIO, &audio_i2s_program);
+    uint program_offset = generate_pio_program();
+
     // call the PIO block setup function
-    audio_i2s_program_init(I2S_PIO, I2S_PIO_SM, program_offset, PIN_DATA, PIN_CLK_BASE);
+    // audio_i2s_program_init(I2S_PIO, I2S_PIO_SM, program_offset, PIN_DATA, PIN_CLK_BASE);
+    pio_sm_config sm_config = pio_get_default_sm_config();
+    sm_config_set_wrap(&sm_config, program_offset + 0, program_offset + I2S_PIO_PROGRAM_LENGTH-1); // set program length and wrapping
+    sm_config_set_sideset(&sm_config, 2, false, false); // set side pin count
+
+    sm_config_set_out_pins(&sm_config, PIN_DATA, 1);
+    sm_config_set_sideset_pins(&sm_config, PIN_CLK_BASE);
+    sm_config_set_out_shift(&sm_config, false, true, BIT_DEPTH); // enables autopull with correct bit per sample count
+
+    pio_sm_init(I2S_PIO, I2S_PIO_SM, program_offset, &sm_config);
+
+    pio_gpio_init(I2S_PIO, PIN_DATA);
+    pio_gpio_init(I2S_PIO, PIN_CLK_BASE);
+    pio_gpio_init(I2S_PIO, PIN_CLK_BASE+1);
+
+    uint pin_mask = (1u << PIN_DATA) | (3u << PIN_CLK_BASE);
+    pio_sm_set_pindirs_with_mask(I2S_PIO, I2S_PIO_SM, pin_mask, pin_mask);
+    pio_sm_set_pins(I2S_PIO, I2S_PIO_SM, 0);
+
+    pio_sm_exec(I2S_PIO, I2S_PIO_SM, pio_encode_jmp(program_offset + I2S_PIO_PROGRAM_LENGTH-1));
+
     // set clock settings
     set_pio_divider(divider);
+}
+
+uint I2S_TX::generate_pio_program() {
+    // TODO: this could be a lot prettier using the pio_encode_*() functions
+    uint32_t bit_depth_value = (BIT_DEPTH-2) & 0x1F;
+
+    // generate the PIO code
+    i2s_pio_code[0] = 0x7001;                   //  0: out    pins, 1         side 2
+    i2s_pio_code[1] = 0x1840,                   //  1: jmp    x--, 0          side 3
+    i2s_pio_code[2] = 0x6001,                   //  2: out    pins, 1         side 0
+    i2s_pio_code[3] = 0xe820 | bit_depth_value, //  3: set    x, BIT_DEPTH-2  side 1
+    i2s_pio_code[4] = 0x6001,                   //  4: out    pins, 1         side 0
+    i2s_pio_code[5] = 0x0844,                   //  5: jmp    x--, 4          side 1
+    i2s_pio_code[6] = 0x7001,                   //  6: out    pins, 1         side 2
+    i2s_pio_code[7] = 0xf820 | bit_depth_value, //  7: set    x, BIT_DEPTH-2  side 3
+
+    // set PIO header
+    i2s_program_header.instructions = i2s_pio_code;
+    i2s_program_header.length = 8;
+    i2s_program_header.origin = -1;
+
+    pio_program_offset = pio_add_program(I2S_PIO, &i2s_program_header);
+    return pio_program_offset;
 }
 
 void I2S_TX::configure_dma() {
@@ -98,3 +175,4 @@ void I2S_TX::start_i2s() {
     irq_set_enabled(DMA_IRQ_0 + I2S_DMA_IRQ, 1);
     dma_channel_transfer_from_buffer_now(I2S_DMA_CHANNEL, dummy_buffer, dummy_buffer_len);
 }
+

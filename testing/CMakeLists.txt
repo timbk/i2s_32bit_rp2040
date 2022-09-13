@@ -13,9 +13,6 @@ add_executable(testing_i2s
     i2s.cpp
 )
 
-pico_generate_pio_header(testing_i2s ${CMAKE_CURRENT_LIST_DIR}/audio_i2s.pio)
-
-
 target_compile_options(testing_i2s PRIVATE -Wall ) # These all throw too many warning from SDK: -Wpedantic -Werror -Wextra
 
 set_property(TARGET testing_i2s PROPERTY CXX_STANDARD 20)

@@ -1,6 +1,19 @@
 # i2s_32bit_rp2040
 An up to 32bit I2S library for the RP2040 using PIO
 
+## Context
+
+The library in [pico-extras I2S library](https://github.com/raspberrypi/pico-extras/tree/master/src/rp2_common/pico_audio_i2s) was not sufficient for me as it did not include the following features:
+
+* Flexible sample sizes >16 bit
+* I2S receiver
+* Generating an MCLK signal
+* More control for real time applications
+
+I also did not like the quite complex audio interface implemented in pico-extras. I'm trying to keep this interface simpler and more aimed towards signal generation instead of audio.
+
+The interface is designed to be compatible with the pinout of the pico-extras code at the time of writing this.
+
 ## Compiling
 
 With pico-sdk environment variables set: Go to `testing/` and execute `./make.sh`. It should build the binary in `testing/build/`

@@ -30,31 +30,9 @@ private:
     uint buffer_size, pattern_length;
     PATTERN pattern;
     int32_t offset, amplitude;
-public:
-    PATTERN_BUFFER(uint _buffer_size) : buffer_size(_buffer_size){
-        pattern_buffer = new int32_t[buffer_size*2];
 
-        pattern_length = buffer_size;
-        pattern = PATTERN::CONST;
-        offset = 0;
-        amplitude = 0;
-    }
-
-    ~PATTERN_BUFFER() {
-        delete [] pattern_buffer;
-    }
-
-    /**
-     * @brief change setting generator
-     *
-     * @return new pattern length (might be clipped due to buffer size
-     */
-    uint set_pattern(PATTERN new_pattern, int32_t new_offset, int32_t new_amplitude, uint new_pattern_length) {
-        pattern = new_pattern;
-        offset = new_offset;
-        amplitude = new_amplitude;
-        pattern_length = new_pattern_length < buffer_size ? new_pattern_length : buffer_size;
-
+    /// update the pattern buffer
+    void update_pattern_buffer() {
         switch(pattern) {
             case PATTERN::CONST:
                 for(uint i=0; i<pattern_length*2; ++i)
@@ -83,6 +61,38 @@ public:
                 for(uint i=0; i<pattern_length*2; ++i)
                     pattern_buffer[i] = 0;
         }
+    }
+public:
+    PATTERN_BUFFER(uint _buffer_size) : buffer_size(_buffer_size){
+        pattern_buffer = new int32_t[buffer_size*2];
+
+        pattern_length = buffer_size;
+        pattern = PATTERN::CONST;
+        offset = 0;
+        amplitude = 0;
+    }
+
+    ~PATTERN_BUFFER() {
+        delete [] pattern_buffer;
+    }
+
+    void set_pattern(PATTERN new_pattern) { pattern = new_pattern; update_pattern_buffer(); }
+    void set_offset(int32_t new_offset) { offset = new_offset; update_pattern_buffer(); }
+    void set_amplitude(int32_t new_amplitude) { amplitude = new_amplitude; update_pattern_buffer(); }
+    uint set_pattern_length(uint new_pattern_length) { return pattern_length = new_pattern_length < buffer_size ? new_pattern_length : buffer_size; update_pattern_buffer(); }
+
+    /**
+     * @brief change setting generator
+     *
+     * @return new pattern length (might be clipped due to buffer size
+     */
+    uint set_pattern(PATTERN new_pattern, int32_t new_offset, int32_t new_amplitude, uint new_pattern_length) {
+        pattern = new_pattern;
+        offset = new_offset;
+        amplitude = new_amplitude;
+        pattern_length = new_pattern_length < buffer_size ? new_pattern_length : buffer_size;
+
+        update_pattern_buffer();
 
         return pattern_length;
     }

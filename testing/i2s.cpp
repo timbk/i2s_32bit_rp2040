@@ -70,6 +70,7 @@ void __isr __time_critical_func(audio_i2s_dma_irq_handler)() {
 // ------------- I2S_TX Class ---------------- //
 
 I2S_TX::I2S_TX (
+    uint8_t pattern_buffer_size,
     uint8_t pin_data,
     uint8_t pin_clock_base,
     uint8_t bit_depth,
@@ -77,7 +78,7 @@ I2S_TX::I2S_TX (
     uint8_t i2s_pio_sm,
     uint8_t i2s_dma_channel,
     uint8_t i2s_dma_irq
-    ) : I2S_PIO(i2s_pio), I2S_PIO_SM(i2s_pio_sm), I2S_DMA_CHANNEL(i2s_dma_channel), I2S_DMA_IRQ(i2s_dma_irq), BIT_DEPTH(bit_depth),PIN_DATA(pin_data), PIN_CLK_BASE(pin_clock_base) {
+    ) : pattern_buffer(pattern_buffer_size), I2S_PIO(i2s_pio), I2S_PIO_SM(i2s_pio_sm), I2S_DMA_CHANNEL(i2s_dma_channel), I2S_DMA_IRQ(i2s_dma_irq), BIT_DEPTH(bit_depth),PIN_DATA(pin_data), PIN_CLK_BASE(pin_clock_base) {
 
     configure_pio(2500); // correct for 96 kHz 32bit @ 120 MHz system clock, 2 clock steps per bit in PIO
     configure_dma();

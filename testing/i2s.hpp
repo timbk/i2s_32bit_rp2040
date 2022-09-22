@@ -6,6 +6,74 @@
 
 #define I2S_PIO_PROGRAM_LENGTH 8
 
+#include <exception>
+
+/**
+ * @brief small class that provides the I2S buffer and pattern
+ *  can generate some basic waveforms and quick updating
+ */
+class PATTERN_BUFFER {
+public:
+    enum PATTERN{
+        CONST = 0,
+        SINE=1,
+        TRI=2,
+        SQUARE=3,
+    };
+private:
+    uint32_t *pattern_buffer;
+    uint buffer_size, pattern_length, pattern_interpolation;
+    PATTERN pattern;
+    int32_t offset, amplitude;
+public:
+    PATTERN_BUFFER(uint _buffer_size) : buffer_size(_buffer_size){
+        pattern_buffer = new uint32_t[buffer_size];
+        // TODO: initialize all variables with reasonable defaults
+        offset = 0;
+        amplitude = 0;
+        pattern = PATTERN::CONST;
+        pattern_length=buffer_size;
+    }
+
+    ~PATTERN_BUFFER() {
+        delete [] pattern_buffer;
+    }
+
+    /**
+     * @brief change setting generator
+     *
+     * @return new pattern length (might be clipped due to buffer size
+     */
+    uint set_pattern(PATTERN new_pattern, int32_t new_offset, int32_t new_amplitude, uint new_pattern_length) {
+        pattern = new_pattern;
+        offset = new_offset;
+        amplitude = new_amplitude;
+        pattern_length = new_pattern_length < buffer_size ? new_pattern_length : buffer_size;
+
+        switch(pattern) {
+            case PATTERN::CONST:
+                for(uint i=0; i<pattern_length; ++i)
+                    pattern_buffer[i] = offset;
+                break;
+            default: // handle undefined pattern values gracefully
+                printf("pattern_buffer: Pattern not implemented\n");
+                for(uint i=0; i<pattern_length; ++i)
+                    pattern_buffer[i] = 0;
+        }
+
+        return pattern_length;
+    }
+	
+    // TODO: low frequency signal interpolation with second buffer?
+    uint32_t *get_next_buffer(uint &buffer_len) {
+        switch(pattern) {
+            case PATTERN::CONST:
+                break; // nothing special to do; buffer is already filled
+        }
+        return pattern_buffer;
+    }
+};
+
 /**
  * @brief I2S signal generator using PIO
  * This is an I2S transmitter implementation for the RP2040 PIO.
@@ -33,6 +101,8 @@ private:
     uint16_t i2s_pio_code[I2S_PIO_PROGRAM_LENGTH];
     struct pio_program i2s_program_header;
     uint pio_program_offset;
+
+    PATTERN_BUFFER pattern_buffer;
 private:
     /**
      * @brief set up PIO as we need it
@@ -50,19 +120,21 @@ private:
 public:
     /**
      * @brief constructor
+     * @param pattern_buffer_size size of the pattern buffer in samples
      * @param pin_data pin number of the I2S data output pin
      * @param pin_clock_base pin number of the BCLK clock pin
      *                       LRCK is at pin (clock_base_pin + 1)
      *                       (chosen to be pin compatible to the pico-extras I2S implementation)
      * @param bit_depth I2S bit count per sample (valid values are 2..32)
      * @param i2s_pio either pio0 or pio1, can be adjusted to avoid conflictls with other PIO programs
-     * @param i2s_pio_sm The state machine to be used, can be adjusted to avoid conflictls with other PIO programs
-     * @param i2s_dma_channel The DMA channel to be used, can be adjusted to avoid conflictls
-     * @param i2s_dma_irq The DMA interrupt to be used, can be adjusted to avoid conflictls
+     * @param i2s_pio_sm The state machine to be used, can be adjusted to avoid conflictls with other PIO programs (0..3)
+     * @param i2s_dma_channel The DMA channel to be used, can be adjusted to avoid conflictls (0..11)
+     * @param i2s_dma_irq The DMA interrupt to be used, can be adjusted to avoid conflictls (0..1)
      *
      * clock divider setting defaults to 100*256 (sample_rate = 125e6/(clock_divider/256)/bit_depth)
      */
     I2S_TX (
+        uint8_t pattern_buffer_size,
         uint8_t pin_data,
         uint8_t pin_clock_base,
         uint8_t bit_depth = 32,
@@ -83,4 +155,9 @@ public:
 
     /// enable PIO and start DMA
     void start_i2s();
+
+    /// just a wrapper for PATTERN_BUFFER::set_pattern()
+    uint set_pattern(PATTERN_BUFFER::PATTERN pattern, int32_t offset, int32_t amplitude, uint pattern_length) {
+        return pattern_buffer.set_pattern(pattern, offset, amplitude, pattern_length);
+    }
 };

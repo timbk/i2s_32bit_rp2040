@@ -7,6 +7,8 @@
 #define I2S_PIO_PROGRAM_LENGTH 8
 
 #include <exception>
+#define _USE_MATH_DEFINES
+#include <cmath>
 
 // This can be changed to DMA IRQ1 if needed
 #define I2S_DMA_IRQ 0
@@ -24,13 +26,13 @@ public:
         SQUARE=3,
     };
 private:
-    uint32_t *pattern_buffer;
+    int32_t *pattern_buffer;
     uint buffer_size, pattern_length;
     PATTERN pattern;
     int32_t offset, amplitude;
 public:
     PATTERN_BUFFER(uint _buffer_size) : buffer_size(_buffer_size){
-        pattern_buffer = new uint32_t[buffer_size*2];
+        pattern_buffer = new int32_t[buffer_size*2];
 
         pattern_length = buffer_size;
         pattern = PATTERN::CONST;
@@ -58,6 +60,24 @@ public:
                 for(uint i=0; i<pattern_length*2; ++i)
                     pattern_buffer[i] = offset;
                 break;
+            case PATTERN::SINE:
+                for(uint i=0; i<pattern_length*2; ++i)
+                    pattern_buffer[i] = sin(2*M_PI*(((int)(i/2))/(float)pattern_length))*amplitude + offset;
+                break;
+            case PATTERN::TRI:
+                for(uint i=0; i<pattern_length; ++i) {
+                    if(i < (pattern_length/2)) {
+                        pattern_buffer[i] = amplitude * i*2/pattern_length + offset;
+                    } else {
+                        pattern_buffer[i] = amplitude * (pattern_length-i-1)*2/pattern_length + offset;
+                    }
+                    pattern_buffer[i+1] = pattern_buffer[i];
+                }
+                break;
+            case PATTERN::SQUARE:
+                for(uint i=0; i<pattern_length*2; ++i)
+                    pattern_buffer[i] = (((uint)(i/2)) >= (pattern_length/2))*amplitude + offset;
+                break;
             default: // handle undefined pattern values gracefully
                 printf("pattern_buffer: Pattern not implemented\n");
                 for(uint i=0; i<pattern_length*2; ++i)
@@ -68,12 +88,8 @@ public:
     }
 	
     // TODO: low frequency signal interpolation with second buffer?
-    uint32_t *get_next_buffer(uint &buffer_len) {
-        switch(pattern) {
-            case PATTERN::CONST:
-                buffer_len = pattern_length*2;
-                break; // nothing special to do; buffer is already filled
-        }
+    int32_t *get_next_buffer(uint &buffer_len) {
+        buffer_len = pattern_length*2;
         return pattern_buffer;
     }
 };

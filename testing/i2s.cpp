@@ -27,7 +27,7 @@ I2S_SETTINGS i2s_settings[12] = {
 void __isr __time_critical_func(audio_i2s_dma_irq_handler)() {
     dma_channel_config c;
     uint buffer_len = 0;
-    uint32_t *new_buffer;
+    int32_t *new_buffer;
 
     for(uint dma_channel=0; dma_channel<12; ++dma_channel) {
         if (i2s_settings[dma_channel].initialized && dma_irqn_get_channel_status(I2S_DMA_IRQ, dma_channel)) {
@@ -151,7 +151,7 @@ void I2S_TX::configure_dma() {
 
 void I2S_TX::start_i2s() {
     uint buffer_len = 0;
-    uint32_t *new_buffer;
+    int32_t *new_buffer;
 
     printf("i2s interrupt started\n");
     pio_sm_set_enabled(I2S_PIO, I2S_PIO_SM, 1);

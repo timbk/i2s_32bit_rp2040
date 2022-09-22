@@ -2,91 +2,70 @@
 
 #include "i2s.hpp"
 
-// TODO: remove this
-const uint dummy_buffer_len = 32;
-/*
-uint32_t dummy_buffer[dummy_buffer_len]={
-    0x00000000, 0x00000000,
-    0x30FBC54C, 0x00000000,
-    0x5A827999, 0x00000000,
-    0x7641AF3B, 0x00000000,
-    0x7FFFFFFF, 0x00000000,
-    0x7641AF3B, 0x00000000,
-    0x5A827999, 0x00000000,
-    0x30FBC54C, 0x00000000,
-    0x00000000, 0x00000000,
-    0xCF043AB4, 0x00000000,
-    0xA57D8667, 0x00000000,
-    0x89BE50C5, 0x00000000,
-    0x80000001, 0x00000000,
-    0x89BE50C5, 0x00000000,
-    0xA57D8667, 0x00000000,
-    0xCF043AB4, 0x00000000,
-};*/
-uint32_t dummy_buffer[dummy_buffer_len]={
-    0x11234567, 0x00000000,
-    0x21234567, 0x00000000,
-    0x31234567, 0x00000000,
-    0x41234567, 0x00000000,
-    0x51234567, 0x00000000,
-    0x61234567, 0x00000000,
-    0x71234567, 0x00000000,
-    0x81234567, 0x00000000,
-    0x91234567, 0x00000000,
-    0xA1234567, 0x00000000,
-    0xB1234567, 0x00000000,
-    0xC1234567, 0x00000000,
-    0xD1234567, 0x00000000,
-    0xE1234567, 0x00000000,
-    0xF1234567, 0x00000000,
-    0x01234567, 0x00000000,
-};
-
 struct I2S_SETTINGS{
     bool initialized;
-    uint8_t dma_irq;
-    uint8_t dma_channel;
+    PATTERN_BUFFER *pattern_buffer;
 };
 
-I2S_SETTINGS i2s_settings = {false, 0, 0};
+// list of pattern buffers for the individual DMA channels
+I2S_SETTINGS i2s_settings[12] = {
+    {false, NULL},
+    {false, NULL},
+    {false, NULL},
+    {false, NULL},
+    {false, NULL},
+    {false, NULL},
+    {false, NULL},
+    {false, NULL},
+    {false, NULL},
+    {false, NULL},
+    {false, NULL},
+    {false, NULL},
+};
 
 // irq handler for DMA
 void __isr __time_critical_func(audio_i2s_dma_irq_handler)() {
-    if(not i2s_settings.initialized)
-        return;
+    dma_channel_config c;
+    uint buffer_len = 0;
+    uint32_t *new_buffer;
 
-    if (dma_irqn_get_channel_status(i2s_settings.dma_irq, i2s_settings.dma_channel)) {
-        dma_irqn_acknowledge_channel(i2s_settings.dma_irq, i2s_settings.dma_channel);
+    for(uint dma_channel=0; dma_channel<12; ++dma_channel) {
+        if (i2s_settings[dma_channel].initialized && dma_irqn_get_channel_status(I2S_DMA_IRQ, dma_channel)) {
+            dma_irqn_acknowledge_channel(I2S_DMA_IRQ, dma_channel);
 
-        // from audio_start_dma_transfer
-        dma_channel_config c = dma_get_channel_config(i2s_settings.dma_channel);
-        channel_config_set_read_increment(&c, true);
-        dma_channel_set_config(i2s_settings.dma_channel, &c, false);
+            // from audio_start_dma_transfer
+            c = dma_get_channel_config(dma_channel);
+            channel_config_set_read_increment(&c, true);
+            dma_channel_set_config(dma_channel, &c, false);
 
-        dma_channel_transfer_from_buffer_now(i2s_settings.dma_channel, dummy_buffer, dummy_buffer_len);
+            new_buffer = i2s_settings[dma_channel].pattern_buffer->get_next_buffer(buffer_len);
+            dma_channel_transfer_from_buffer_now(dma_channel, new_buffer, buffer_len);
+        }
     }
 }
 
 // ------------- I2S_TX Class ---------------- //
 
 I2S_TX::I2S_TX (
-    uint8_t pattern_buffer_size,
+    uint pattern_buffer_size,
     uint8_t pin_data,
     uint8_t pin_clock_base,
     uint8_t bit_depth,
     PIO i2s_pio,
     uint8_t i2s_pio_sm,
-    uint8_t i2s_dma_channel,
-    uint8_t i2s_dma_irq
-    ) : pattern_buffer(pattern_buffer_size), I2S_PIO(i2s_pio), I2S_PIO_SM(i2s_pio_sm), I2S_DMA_CHANNEL(i2s_dma_channel), I2S_DMA_IRQ(i2s_dma_irq), BIT_DEPTH(bit_depth),PIN_DATA(pin_data), PIN_CLK_BASE(pin_clock_base) {
+    uint8_t i2s_dma_channel
+    ) : pattern_buffer(pattern_buffer_size), I2S_PIO(i2s_pio), I2S_PIO_SM(i2s_pio_sm), I2S_DMA_CHANNEL(i2s_dma_channel), BIT_DEPTH(bit_depth),PIN_DATA(pin_data), PIN_CLK_BASE(pin_clock_base) {
 
     configure_pio(2500); // correct for 96 kHz 32bit @ 120 MHz system clock, 2 clock steps per bit in PIO
     configure_dma();
 
     // pass data to DMA hanlder
-    i2s_settings.dma_channel = I2S_DMA_CHANNEL;
-    i2s_settings.dma_irq = I2S_DMA_IRQ;
-    i2s_settings.initialized = true;
+    i2s_settings[I2S_DMA_CHANNEL].pattern_buffer = &pattern_buffer;
+    i2s_settings[I2S_DMA_CHANNEL].initialized = true;
+}
+
+I2S_TX::~I2S_TX () {
+    i2s_settings[I2S_DMA_CHANNEL].initialized = false;
 }
 
 void I2S_TX::set_pio_divider(uint16_t divider) {
@@ -171,9 +150,13 @@ void I2S_TX::configure_dma() {
 }
 
 void I2S_TX::start_i2s() {
+    uint buffer_len = 0;
+    uint32_t *new_buffer;
+
     printf("i2s interrupt started\n");
     pio_sm_set_enabled(I2S_PIO, I2S_PIO_SM, 1);
     irq_set_enabled(DMA_IRQ_0 + I2S_DMA_IRQ, 1);
-    dma_channel_transfer_from_buffer_now(I2S_DMA_CHANNEL, dummy_buffer, dummy_buffer_len);
-}
 
+    new_buffer = i2s_settings[I2S_DMA_CHANNEL].pattern_buffer->get_next_buffer(buffer_len);
+    dma_channel_transfer_from_buffer_now(I2S_DMA_CHANNEL, new_buffer, buffer_len);
+}

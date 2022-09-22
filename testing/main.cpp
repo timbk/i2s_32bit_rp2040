@@ -13,6 +13,8 @@
 #define PIN_I2S_DOUT 20
 #define PIN_I2S_CLOCK_BASE 17
 
+const uint PATTERN_BUFFER_SIZE = 4096;
+
 int main(void) {
     // configure UART
     stdio_uart_init_full(uart0, 115200, 0, 1);
@@ -23,13 +25,15 @@ int main(void) {
     gpio_put(LED_PIN, 0); 
 
     // create i2s instance
-    I2S_TX i2s_tx(PIN_I2S_DOUT, PIN_I2S_CLOCK_BASE, 32);
+    I2S_TX i2s_tx(PATTERN_BUFFER_SIZE, PIN_I2S_DOUT, PIN_I2S_CLOCK_BASE, 32);
+    i2s_tx.set_pattern(PATTERN_BUFFER::PATTERN::CONST, 1234, 0, 1);
 
     i2s_tx.start_i2s();
 
-    uint32_t u = 0;
     while (1) {
         gpio_put(LED_PIN, (time_us_32() % 1000000) < 50000);
         // pio_sm_put_blocking(I2S_PIO, I2S_PIO_SM, (u++)%128 + 1000000);
+
+        i2s_tx.set_pattern(PATTERN_BUFFER::PATTERN::CONST, time_us_32()/10/1, 0, 1);
     }
 }

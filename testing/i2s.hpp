@@ -8,6 +8,9 @@
 
 #include <exception>
 
+// This can be changed to DMA IRQ1 if needed
+#define I2S_DMA_IRQ 0
+
 /**
  * @brief small class that provides the I2S buffer and pattern
  *  can generate some basic waveforms and quick updating
@@ -22,17 +25,17 @@ public:
     };
 private:
     uint32_t *pattern_buffer;
-    uint buffer_size, pattern_length, pattern_interpolation;
+    uint buffer_size, pattern_length;
     PATTERN pattern;
     int32_t offset, amplitude;
 public:
     PATTERN_BUFFER(uint _buffer_size) : buffer_size(_buffer_size){
-        pattern_buffer = new uint32_t[buffer_size];
-        // TODO: initialize all variables with reasonable defaults
+        pattern_buffer = new uint32_t[buffer_size*2];
+
+        pattern_length = buffer_size;
+        pattern = PATTERN::CONST;
         offset = 0;
         amplitude = 0;
-        pattern = PATTERN::CONST;
-        pattern_length=buffer_size;
     }
 
     ~PATTERN_BUFFER() {
@@ -52,12 +55,12 @@ public:
 
         switch(pattern) {
             case PATTERN::CONST:
-                for(uint i=0; i<pattern_length; ++i)
+                for(uint i=0; i<pattern_length*2; ++i)
                     pattern_buffer[i] = offset;
                 break;
             default: // handle undefined pattern values gracefully
                 printf("pattern_buffer: Pattern not implemented\n");
-                for(uint i=0; i<pattern_length; ++i)
+                for(uint i=0; i<pattern_length*2; ++i)
                     pattern_buffer[i] = 0;
         }
 
@@ -68,6 +71,7 @@ public:
     uint32_t *get_next_buffer(uint &buffer_len) {
         switch(pattern) {
             case PATTERN::CONST:
+                buffer_len = pattern_length*2;
                 break; // nothing special to do; buffer is already filled
         }
         return pattern_buffer;
@@ -81,11 +85,12 @@ public:
  */
 class I2S_TX {
 private:
+    PATTERN_BUFFER pattern_buffer;
+
     // PIO and DMA settings
     const PIO I2S_PIO;
     const uint8_t I2S_PIO_SM;
     const uint8_t I2S_DMA_CHANNEL;
-    const uint8_t I2S_DMA_IRQ;
 
     // general setup
     const uint8_t BIT_DEPTH;
@@ -101,8 +106,6 @@ private:
     uint16_t i2s_pio_code[I2S_PIO_PROGRAM_LENGTH];
     struct pio_program i2s_program_header;
     uint pio_program_offset;
-
-    PATTERN_BUFFER pattern_buffer;
 private:
     /**
      * @brief set up PIO as we need it
@@ -129,20 +132,20 @@ public:
      * @param i2s_pio either pio0 or pio1, can be adjusted to avoid conflictls with other PIO programs
      * @param i2s_pio_sm The state machine to be used, can be adjusted to avoid conflictls with other PIO programs (0..3)
      * @param i2s_dma_channel The DMA channel to be used, can be adjusted to avoid conflictls (0..11)
-     * @param i2s_dma_irq The DMA interrupt to be used, can be adjusted to avoid conflictls (0..1)
      *
      * clock divider setting defaults to 100*256 (sample_rate = 125e6/(clock_divider/256)/bit_depth)
      */
     I2S_TX (
-        uint8_t pattern_buffer_size,
+        uint pattern_buffer_size,
         uint8_t pin_data,
         uint8_t pin_clock_base,
         uint8_t bit_depth = 32,
         PIO i2s_pio = pio0,
         uint8_t i2s_pio_sm = 0,
-        uint8_t i2s_dma_channel = 0,
-        uint8_t i2s_dma_irq = 0
-        );   
+        uint8_t i2s_dma_channel = 0
+    );   
+
+    ~I2S_TX();
 
     /**
      * @brief set the clock divider for the I2S PIO state machiene

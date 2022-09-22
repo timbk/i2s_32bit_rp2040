@@ -25,12 +25,14 @@ public:
         TRI=2,
         SQUARE=3,
     };
-private:
+
     int32_t *pattern_buffer;
+private:
     uint buffer_size, pattern_length;
     PATTERN pattern;
     int32_t offset, amplitude;
 
+private:
     /// update the pattern buffer
     void update_pattern_buffer() {
         switch(pattern) {
@@ -102,6 +104,10 @@ public:
         buffer_len = pattern_length*2;
         return pattern_buffer;
     }
+
+    void print_pattern_config() {
+        printf("pattern=%u, offset=%li, amplitude=%li, length=%u\n", pattern, offset, amplitude, pattern_length);
+    }
 };
 
 /**
@@ -111,8 +117,6 @@ public:
  */
 class I2S_TX {
 private:
-    PATTERN_BUFFER pattern_buffer;
-
     // PIO and DMA settings
     const PIO I2S_PIO;
     const uint8_t I2S_PIO_SM;
@@ -132,6 +136,8 @@ private:
     uint16_t i2s_pio_code[I2S_PIO_PROGRAM_LENGTH];
     struct pio_program i2s_program_header;
     uint pio_program_offset;
+public:
+    PATTERN_BUFFER pattern_buffer;
 private:
     /**
      * @brief set up PIO as we need it

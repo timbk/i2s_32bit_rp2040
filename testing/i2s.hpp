@@ -4,11 +4,11 @@
 #include <hardware/dma.h>
 #include <hardware/clocks.h>
 
-#define I2S_PIO_PROGRAM_LENGTH 8
-
 #include <exception>
 #define _USE_MATH_DEFINES
 #include <cmath>
+
+#define I2S_PIO_MAX_PROGRAM_LENGTH 16
 
 // This can be changed to DMA IRQ1 if needed
 #define I2S_DMA_IRQ 0
@@ -110,6 +110,12 @@ public:
     }
 };
 
+enum I2S_CONTROLLER_MODE {
+    TX = 0,  // for DAC only
+    RX = 1,  // for ADC only
+    TRX = 2, // for ADC & DAC
+};
+
 /**
  * @brief I2S signal generator using PIO
  * This is an I2S transmitter implementation for the RP2040 PIO.
@@ -117,27 +123,32 @@ public:
  */
 class I2S_CONTROLLER {
 private:
+    I2S_CONTROLLER_MODE mode;
+
     // PIO and DMA settings
     const PIO I2S_PIO;
     const uint8_t I2S_PIO_SM;
-    const uint8_t I2S_DMA_CHANNEL;
+    uint8_t I2S_DMA_CHANNEL_TX, I2S_DMA_CHANNEL_RX;
 
     // general setup
     const uint8_t BIT_DEPTH;
 
     // Pin settings
-    const uint8_t PIN_DATA; 
+    const uint8_t PIN_DATA_BASE; 
     const uint8_t PIN_CLK_BASE; 
 
     // status
     uint32_t clock_divider_setting;
 
     // buffers for PIO code
-    uint16_t i2s_pio_code[I2S_PIO_PROGRAM_LENGTH];
+    uint16_t i2s_pio_code[I2S_PIO_MAX_PROGRAM_LENGTH];
     struct pio_program i2s_program_header;
     uint pio_program_offset;
+    uint I2S_PIO_PROGRAM_LENGTH = 0;
 public:
     PATTERN_BUFFER pattern_buffer;
+
+    int32_t *input_buffer = NULL;
 private:
     /**
      * @brief set up PIO as we need it
@@ -151,12 +162,20 @@ private:
      */
     uint generate_pio_program();
 
+    /**
+     * @brief wrapper to configure a DMA channel
+     * @param channel_offset offset to I2S_DMA_CHANNEL
+     * @param is_tx set to true for an outgoing DMA channel
+     * @param enable_dreq enables the data required IRQ for this DMA channel
+     */
+    void configure_dma_channel(uint channel_offset, bool is_tx, bool enable_dreq);
     void configure_dma();
 public:
     /**
      * @brief constructor
      * @param pattern_buffer_size size of the pattern buffer in samples
-     * @param pin_data pin number of the I2S data output pin
+     * @param pin_data_base pin number of the first I2S data pin (in TRX mode order will be TX, RX)
+     * @param mode select for output, input etc
      * @param pin_clock_base pin number of the BCLK clock pin
      *                       LRCK is at pin (clock_base_pin + 1)
      *                       (chosen to be pin compatible to the pico-extras I2S implementation)
@@ -164,13 +183,15 @@ public:
      * @param i2s_pio either pio0 or pio1, can be adjusted to avoid conflictls with other PIO programs
      * @param i2s_pio_sm The state machine to be used, can be adjusted to avoid conflictls with other PIO programs (0..3)
      * @param i2s_dma_channel The DMA channel to be used, can be adjusted to avoid conflictls (0..11)
+     *                        Note that TRX mode will need two channels and also claim the next DMA channel!
      *
      * clock divider setting defaults to 100*256 (sample_rate = 125e6/(clock_divider/256)/bit_depth)
      */
     I2S_CONTROLLER (
         uint pattern_buffer_size,
-        uint8_t pin_data,
+        uint8_t pin_data_base,
         uint8_t pin_clock_base,
+        I2S_CONTROLLER_MODE trx_mode = I2S_CONTROLLER_MODE::TX,
         uint8_t bit_depth = 32,
         PIO i2s_pio = pio0,
         uint8_t i2s_pio_sm = 0,
@@ -193,6 +214,8 @@ public:
 
     /// just a wrapper for PATTERN_BUFFER::set_pattern()
     uint set_pattern(PATTERN_BUFFER::PATTERN pattern, int32_t offset, int32_t amplitude, uint pattern_length) {
-        return pattern_buffer.set_pattern(pattern, offset, amplitude, pattern_length);
+        if(mode != I2S_CONTROLLER_MODE::RX) {
+            return pattern_buffer.set_pattern(pattern, offset, amplitude, pattern_length);
+        }
     }
 };

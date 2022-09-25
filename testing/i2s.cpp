@@ -44,9 +44,9 @@ void __isr __time_critical_func(audio_i2s_dma_irq_handler)() {
     }
 }
 
-// ------------- I2S_TX Class ---------------- //
+// ------------- I2S_CONTROLLER Class ---------------- //
 
-I2S_TX::I2S_TX (
+I2S_CONTROLLER::I2S_CONTROLLER (
     uint pattern_buffer_size,
     uint8_t pin_data,
     uint8_t pin_clock_base,
@@ -64,21 +64,21 @@ I2S_TX::I2S_TX (
     i2s_settings[I2S_DMA_CHANNEL].initialized = true;
 }
 
-I2S_TX::~I2S_TX () {
+I2S_CONTROLLER::~I2S_CONTROLLER () {
     i2s_settings[I2S_DMA_CHANNEL].initialized = false;
 }
 
-void I2S_TX::set_pio_divider(uint16_t divider) {
+void I2S_CONTROLLER::set_pio_divider(uint16_t divider) {
     clock_divider_setting = divider;
     pio_sm_set_clkdiv_int_frac(I2S_PIO, I2S_PIO_SM, divider >> 8, divider & 0xff);
 }
 
-float I2S_TX::get_sample_rate() const {
+float I2S_CONTROLLER::get_sample_rate() const {
     //     System clock            Fractional divider value       Bit count   left/right samples
     return clock_get_hz(clk_sys) / (clock_divider_setting/256.) / BIT_DEPTH / 2;
 }
 
-void I2S_TX::configure_pio(uint32_t divider) {
+void I2S_CONTROLLER::configure_pio(uint32_t divider) {
     // load program
     uint program_offset = generate_pio_program();
 
@@ -108,7 +108,7 @@ void I2S_TX::configure_pio(uint32_t divider) {
     set_pio_divider(divider);
 }
 
-uint I2S_TX::generate_pio_program() {
+uint I2S_CONTROLLER::generate_pio_program() {
     // TODO: this could be a lot prettier using the pio_encode_*() functions
     uint32_t bit_depth_value = (BIT_DEPTH-2) & 0x1F;
 
@@ -131,7 +131,7 @@ uint I2S_TX::generate_pio_program() {
     return pio_program_offset;
 }
 
-void I2S_TX::configure_dma() {
+void I2S_CONTROLLER::configure_dma() {
     dma_channel_claim(I2S_DMA_CHANNEL);
     dma_channel_config dma_config = dma_channel_get_default_config(I2S_DMA_CHANNEL);
 
@@ -149,7 +149,7 @@ void I2S_TX::configure_dma() {
     dma_irqn_set_channel_enabled(I2S_DMA_IRQ, I2S_DMA_CHANNEL, 1);
 }
 
-void I2S_TX::start_i2s() {
+void I2S_CONTROLLER::start_i2s() {
     uint buffer_len = 0;
     int32_t *new_buffer;
 

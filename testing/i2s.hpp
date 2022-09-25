@@ -47,11 +47,11 @@ private:
             case PATTERN::TRI:
                 for(uint i=0; i<pattern_length; ++i) {
                     if(i < (pattern_length/2)) {
-                        pattern_buffer[i] = amplitude * i*2/pattern_length + offset;
+                        pattern_buffer[i*2] = ((float)amplitude) * i*2/pattern_length + offset;
                     } else {
-                        pattern_buffer[i] = amplitude * (pattern_length-i-1)*2/pattern_length + offset;
+                        pattern_buffer[i*2] = ((float)amplitude) * (pattern_length-i-1)*2/pattern_length + offset;
                     }
-                    pattern_buffer[i+1] = pattern_buffer[i];
+                    pattern_buffer[i*2+1] = pattern_buffer[i*2];
                 }
                 break;
             case PATTERN::SQUARE:
@@ -115,7 +115,7 @@ public:
  * This is an I2S transmitter implementation for the RP2040 PIO.
  * It is built for up to 32 bits and 
  */
-class I2S_TX {
+class I2S_CONTROLLER {
 private:
     // PIO and DMA settings
     const PIO I2S_PIO;
@@ -167,7 +167,7 @@ public:
      *
      * clock divider setting defaults to 100*256 (sample_rate = 125e6/(clock_divider/256)/bit_depth)
      */
-    I2S_TX (
+    I2S_CONTROLLER (
         uint pattern_buffer_size,
         uint8_t pin_data,
         uint8_t pin_clock_base,
@@ -177,7 +177,7 @@ public:
         uint8_t i2s_dma_channel = 0
     );   
 
-    ~I2S_TX();
+    ~I2S_CONTROLLER();
 
     /**
      * @brief set the clock divider for the I2S PIO state machiene

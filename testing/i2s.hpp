@@ -166,9 +166,8 @@ private:
      * @brief wrapper to configure a DMA channel
      * @param channel_offset offset to I2S_DMA_CHANNEL
      * @param is_tx set to true for an outgoing DMA channel
-     * @param enable_dreq enables the data required IRQ for this DMA channel
      */
-    void configure_dma_channel(uint channel_offset, bool is_tx, bool enable_dreq);
+    void configure_dma_channel(uint channel_offset, bool is_tx);
     void configure_dma();
 public:
     /**

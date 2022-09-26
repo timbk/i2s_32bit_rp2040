@@ -30,38 +30,34 @@ I2S_SETTINGS i2s_settings[12] = {
 
 uint last_buffer_len=1; // TODO remove
 
+int32_t temporaerer_buffer_chooser = 0;
+int32_t temporaerer_buffer[2][4096];
+
 // irq handler for DMA
-void __isr __time_critical_func(audio_i2s_dma_irq_handler)() {
-    dma_channel_config c;
+void __isr __time_critical_func(i2s_dma_irq_handler)() {
     uint buffer_len = 0;
     int32_t *new_buffer;
     bool did_something = false;
 
     for(uint dma_channel=0; dma_channel<12; ++dma_channel) {
         if (i2s_settings[dma_channel].tx_initialized && dma_irqn_get_channel_status(I2S_DMA_IRQ, dma_channel)) {
-            // clear IRQ and set read increment (TODO: do we really need to set read increment every time?)
+            puts("TX");
+            // clear IRQ
             dma_irqn_acknowledge_channel(I2S_DMA_IRQ, dma_channel);
-
-            c = dma_get_channel_config(dma_channel);
-            channel_config_set_read_increment(&c, true);
-            dma_channel_set_config(dma_channel, &c, false);
 
             new_buffer = i2s_settings[dma_channel].pattern_buffer->get_next_buffer(buffer_len);
             dma_channel_transfer_from_buffer_now(dma_channel, new_buffer, buffer_len);
             last_buffer_len = buffer_len;
-            // puts("TX");
             did_something = true;
         } else if (i2s_settings[dma_channel].rx_initialized && dma_irqn_get_channel_status(I2S_DMA_IRQ, dma_channel)) {
-            // puts("DMA RX");
-            // clear IRQ and set read increment (TODO: do we really need to set read increment every time?)
+            puts("RX");
+            // clear IRQ
             dma_irqn_acknowledge_channel(I2S_DMA_IRQ, dma_channel);
 
-            c = dma_get_channel_config(dma_channel);
-            channel_config_set_write_increment(&c, true);
-            dma_channel_set_config(dma_channel, &c, false);
-
-            dma_channel_transfer_to_buffer_now(dma_channel, i2s_settings[dma_channel].rx_buffer, 10); // TODO: fix
-            puts("RX");
+            // TODO: do something with new data / swap buffer
+            temporaerer_buffer_chooser += 1;
+            temporaerer_buffer_chooser %= 2;
+            dma_channel_transfer_to_buffer_now(dma_channel, temporaerer_buffer[temporaerer_buffer_chooser], last_buffer_len); // TODO: fix
             did_something = true;
         }
     }
@@ -260,42 +256,57 @@ uint I2S_CONTROLLER::generate_pio_program() {
     return pio_program_offset;
 }
 
-void I2S_CONTROLLER::configure_dma_channel(uint dma_channel, bool is_tx, bool enable_dreq) {
+void I2S_CONTROLLER::configure_dma_channel(uint dma_channel, bool is_tx) {
     // configure DMA channel
     printf("Configuring DMA channel %d for i2s\n", dma_channel);
     dma_channel_claim(dma_channel);
     dma_channel_config dma_config = dma_channel_get_default_config(dma_channel);
 
-    if(enable_dreq)
-        channel_config_set_dreq(&dma_config, pio_get_dreq(I2S_PIO, I2S_PIO_SM, is_tx));
+    channel_config_set_dreq(&dma_config, pio_get_dreq(I2S_PIO, I2S_PIO_SM, is_tx));
+    if(is_tx) {
+        channel_config_set_read_increment(&dma_config, true);
+        channel_config_set_write_increment(&dma_config, false);
+    } else {    
+        channel_config_set_write_increment(&dma_config, true);
+        channel_config_set_read_increment(&dma_config, false); // REQUIRED (I don't get why, but must be set like this for RX to work
+    }
 
     channel_config_set_transfer_data_size(&dma_config, DMA_SIZE_32); // 8, 16 and 32 bit DMAs are possible
-    dma_channel_configure(dma_channel,
-        &dma_config,
-        &I2S_PIO->txf[I2S_PIO_SM],
-        NULL,
-        0,
-        false
-    );
+
+    if(is_tx) {
+        dma_channel_configure(dma_channel,
+            &dma_config,
+            &I2S_PIO->txf[I2S_PIO_SM],
+            NULL,
+            0,
+            false
+        );
+    } else {
+        dma_channel_configure(dma_channel,
+            &dma_config,
+            NULL,
+            &I2S_PIO->rxf[I2S_PIO_SM],
+            0,
+            false
+        );
+    }
+
+    dma_irqn_set_channel_enabled(I2S_DMA_IRQ, dma_channel, 1);
 }
 
 void I2S_CONTROLLER::configure_dma() {
-    irq_add_shared_handler(DMA_IRQ_0 + I2S_DMA_IRQ, audio_i2s_dma_irq_handler, PICO_SHARED_IRQ_HANDLER_DEFAULT_ORDER_PRIORITY);
+    irq_add_shared_handler(DMA_IRQ_0 + I2S_DMA_IRQ, i2s_dma_irq_handler, PICO_SHARED_IRQ_HANDLER_DEFAULT_ORDER_PRIORITY);
 
     switch(mode) {
         case I2S_CONTROLLER_MODE::TX:
-            configure_dma_channel(I2S_DMA_CHANNEL_TX, true, true);
-            dma_irqn_set_channel_enabled(I2S_DMA_IRQ, I2S_DMA_CHANNEL_TX, 1);
+            configure_dma_channel(I2S_DMA_CHANNEL_TX, true);
             break;
         case I2S_CONTROLLER_MODE::RX:
-            configure_dma_channel(I2S_DMA_CHANNEL_RX, false, true);
-            dma_irqn_set_channel_enabled(I2S_DMA_IRQ, I2S_DMA_CHANNEL_RX, 1);
+            configure_dma_channel(I2S_DMA_CHANNEL_RX, false);
             break;
         case I2S_CONTROLLER_MODE::TRX:
-            configure_dma_channel(I2S_DMA_CHANNEL_TX, true, true);
-            configure_dma_channel(I2S_DMA_CHANNEL_RX, false, true);
-            dma_irqn_set_channel_enabled(I2S_DMA_IRQ, I2S_DMA_CHANNEL_RX, 1);
-            dma_irqn_set_channel_enabled(I2S_DMA_IRQ, I2S_DMA_CHANNEL_TX, 1);
+            configure_dma_channel(I2S_DMA_CHANNEL_TX, true);
+            configure_dma_channel(I2S_DMA_CHANNEL_RX, false);
             break;
     }
 
@@ -317,6 +328,8 @@ void I2S_CONTROLLER::start_i2s() {
     
     if(mode != I2S_CONTROLLER_MODE::TX) {
         puts("starting RX DMA");
-        dma_channel_transfer_to_buffer_now(I2S_DMA_CHANNEL_RX, input_buffer, 2);
+        // dma_channel_transfer_to_buffer_now(I2S_DMA_CHANNEL_RX, input_buffer, 4);
+        dma_channel_set_trans_count(I2S_DMA_CHANNEL_RX, 2, false);
+        dma_channel_set_write_addr(I2S_DMA_CHANNEL_RX, temporaerer_buffer[temporaerer_buffer_chooser], true);
     }
 }

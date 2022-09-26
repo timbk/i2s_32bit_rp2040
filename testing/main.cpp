@@ -25,7 +25,7 @@ int main(void) {
     gpio_put(LED_PIN, 0); 
 
     // create i2s instance
-    I2S_CONTROLLER i2s_tx(PATTERN_BUFFER_SIZE, PIN_I2S_DOUT, PIN_I2S_CLOCK_BASE, I2S_CONTROLLER_MODE::TX, 32);
+    I2S_CONTROLLER i2s_tx(PATTERN_BUFFER_SIZE, PIN_I2S_DOUT, PIN_I2S_CLOCK_BASE, I2S_CONTROLLER_MODE::RX, 32);
     i2s_tx.set_pattern(PATTERN_BUFFER::PATTERN::CONST, 1234, 0, 1);
 
     i2s_tx.start_i2s();

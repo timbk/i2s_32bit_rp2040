@@ -28,8 +28,6 @@ I2S_SETTINGS i2s_settings[12] = {
     {false, false, NULL, NULL, 0},
 };
 
-uint last_buffer_len=1; // TODO remove
-
 int32_t temporaerer_buffer_chooser = 0;
 int32_t temporaerer_buffer[2][4096];
 
@@ -37,32 +35,25 @@ int32_t temporaerer_buffer[2][4096];
 void __isr __time_critical_func(i2s_dma_irq_handler)() {
     uint buffer_len = 0;
     int32_t *new_buffer;
-    bool did_something = false;
+
+    // get trigger reason and acknowledge quickly
+    auto &dma_register = I2S_DMA_IRQ ? dma_hw->ints1 : dma_hw->ints0;
+    uint32_t trigger_reason = dma_register;
+    dma_register = trigger_reason;
+
+    static uint cnt = 0;
 
     for(uint dma_channel=0; dma_channel<12; ++dma_channel) {
-        if (i2s_settings[dma_channel].tx_initialized && dma_irqn_get_channel_status(I2S_DMA_IRQ, dma_channel)) {
-            puts("TX");
-            // clear IRQ
-            dma_irqn_acknowledge_channel(I2S_DMA_IRQ, dma_channel);
+        if (i2s_settings[dma_channel].tx_initialized && (trigger_reason & (1<<dma_channel))) {
 
             new_buffer = i2s_settings[dma_channel].pattern_buffer->get_next_buffer(buffer_len);
             dma_channel_transfer_from_buffer_now(dma_channel, new_buffer, buffer_len);
-            last_buffer_len = buffer_len;
-            did_something = true;
-        } else if (i2s_settings[dma_channel].rx_initialized && dma_irqn_get_channel_status(I2S_DMA_IRQ, dma_channel)) {
-            puts("RX");
-            // clear IRQ
-            dma_irqn_acknowledge_channel(I2S_DMA_IRQ, dma_channel);
-
+        } else if (i2s_settings[dma_channel].rx_initialized && (trigger_reason & (1<<dma_channel))) {
             // TODO: do something with new data / swap buffer
             temporaerer_buffer_chooser += 1;
             temporaerer_buffer_chooser %= 2;
-            dma_channel_transfer_to_buffer_now(dma_channel, temporaerer_buffer[temporaerer_buffer_chooser], last_buffer_len); // TODO: fix
-            did_something = true;
+            dma_channel_transfer_to_buffer_now(dma_channel, temporaerer_buffer[temporaerer_buffer_chooser], 8);
         }
-    }
-    if(not did_something) {
-        puts("did nothing");
     }
 }
 
@@ -95,6 +86,7 @@ I2S_CONTROLLER::I2S_CONTROLLER (
     if(mode != I2S_CONTROLLER_MODE::RX) {
         i2s_settings[I2S_DMA_CHANNEL_TX].pattern_buffer = &pattern_buffer;
         i2s_settings[I2S_DMA_CHANNEL_TX].tx_initialized = true;
+        i2s_settings[I2S_DMA_CHANNEL_TX].rx_initialized = false;
     }
 
     if(mode != I2S_CONTROLLER_MODE::TX) {
@@ -102,6 +94,7 @@ I2S_CONTROLLER::I2S_CONTROLLER (
 
         i2s_settings[I2S_DMA_CHANNEL_RX].rx_buffer = input_buffer;
         i2s_settings[I2S_DMA_CHANNEL_RX].rx_initialized = true;
+        i2s_settings[I2S_DMA_CHANNEL_RX].tx_initialized = false;
     }
 }
 
@@ -165,8 +158,8 @@ void I2S_CONTROLLER::configure_pio(uint32_t divider) {
             sm_config_set_in_shift(&sm_config, false, true, BIT_DEPTH); // enables autopull with correct bit per sample count
             break;
         case I2S_CONTROLLER_MODE::TRX:
-            sm_config_set_in_pins(&sm_config, PIN_DATA_BASE);
-            sm_config_set_out_pins(&sm_config, PIN_DATA_BASE+1, 1);
+            sm_config_set_out_pins(&sm_config, PIN_DATA_BASE, 1);
+            sm_config_set_in_pins(&sm_config, PIN_DATA_BASE+1);
 
             pin_mask = (3u << PIN_DATA_BASE) | (7u << PIN_CLK_BASE);
             pin_mask_dir = (1u << PIN_DATA_BASE) | (7u << PIN_CLK_BASE);
@@ -228,21 +221,21 @@ uint I2S_CONTROLLER::generate_pio_program() {
         // TRX PIO ASM
         // This implementation delays for 1/4th of a bit to keep the clock symmetric
         // runs half as fast as TX/RX
-        i2s_pio_code[ 0] = pio_encode_out(pio_src_dest::pio_pins, 1)            | pio_encode_sideset(2, 6);                        //  0: out    pins, 1         side 2
-        i2s_pio_code[ 1] = pio_encode_in(pio_src_dest::pio_pins, 1)             | pio_encode_sideset(2, 6);                        //  1: in     pins, 1         side 2
-        i2s_pio_code[ 2] = pio_encode_jmp_x_dec(0)                              | pio_encode_sideset(2, 7) | pio_encode_delay(1);  //  2: jmp    x--, 0          side 3 delay 1
+        i2s_pio_code[ 0] = pio_encode_out(pio_src_dest::pio_pins, 1)            | pio_encode_sideset(3, 6);                        //  0: out    pins, 1         side 2
+        i2s_pio_code[ 1] = pio_encode_in(pio_src_dest::pio_pins, 1)             | pio_encode_sideset(3, 6);                        //  1: in     pins, 1         side 2
+        i2s_pio_code[ 2] = pio_encode_jmp_x_dec(0)                              | pio_encode_sideset(3, 7) | pio_encode_delay(1);  //  2: jmp    x--, 0          side 3 delay 1
 
-        i2s_pio_code[ 3] = pio_encode_out(pio_src_dest::pio_pins, 1)            | pio_encode_sideset(2, 0);                        //  3: out    pins, 1         side 0
-        i2s_pio_code[ 4] = pio_encode_in(pio_src_dest::pio_pins, 1)             | pio_encode_sideset(2, 0);                        //  4: in     pins, 1         side 0
-        i2s_pio_code[ 5] = pio_encode_set(pio_src_dest::pio_x, bit_depth_value) | pio_encode_sideset(2, 1) | pio_encode_delay(1);  //  5: set    x, BIT_DEPTH-2  side 1 delay 1
+        i2s_pio_code[ 3] = pio_encode_out(pio_src_dest::pio_pins, 1)            | pio_encode_sideset(3, 0);                        //  3: out    pins, 1         side 0
+        i2s_pio_code[ 4] = pio_encode_in(pio_src_dest::pio_pins, 1)             | pio_encode_sideset(3, 0);                        //  4: in     pins, 1         side 0
+        i2s_pio_code[ 5] = pio_encode_set(pio_src_dest::pio_x, bit_depth_value) | pio_encode_sideset(3, 1) | pio_encode_delay(1);  //  5: set    x, BIT_DEPTH-2  side 1 delay 1
 
-        i2s_pio_code[ 6] = pio_encode_out(pio_src_dest::pio_pins, 1)            | pio_encode_sideset(2, 0);                        //  6: out    pins, 1         side 0
-        i2s_pio_code[ 7] = pio_encode_in(pio_src_dest::pio_pins, 1)             | pio_encode_sideset(2, 0);                        //  7: in     pins, 1         side 0
-        i2s_pio_code[ 8] = pio_encode_jmp_x_dec(6)                              | pio_encode_sideset(2, 1) | pio_encode_delay(1);  //  8: jmp    x--, 6          side 1 delay 1
+        i2s_pio_code[ 6] = pio_encode_out(pio_src_dest::pio_pins, 1)            | pio_encode_sideset(3, 0);                        //  6: out    pins, 1         side 0
+        i2s_pio_code[ 7] = pio_encode_in(pio_src_dest::pio_pins, 1)             | pio_encode_sideset(3, 0);                        //  7: in     pins, 1         side 0
+        i2s_pio_code[ 8] = pio_encode_jmp_x_dec(6)                              | pio_encode_sideset(3, 1) | pio_encode_delay(1);  //  8: jmp    x--, 6          side 1 delay 1
 
-        i2s_pio_code[ 9] = pio_encode_out(pio_src_dest::pio_pins, 1)            | pio_encode_sideset(2, 6);                        //  9: out    pins, 1         side 2
-        i2s_pio_code[10] = pio_encode_in(pio_src_dest::pio_pins, 1)             | pio_encode_sideset(2, 6);                        // 10: in     pins, 1         side 2
-        i2s_pio_code[11] = pio_encode_set(pio_src_dest::pio_x, bit_depth_value) | pio_encode_sideset(2, 7) | pio_encode_delay(1);  // 12: set    x, BIT_DEPTH-2  side 3 delay 1
+        i2s_pio_code[ 9] = pio_encode_out(pio_src_dest::pio_pins, 1)            | pio_encode_sideset(3, 6);                        //  9: out    pins, 1         side 2
+        i2s_pio_code[10] = pio_encode_in(pio_src_dest::pio_pins, 1)             | pio_encode_sideset(3, 6);                        // 10: in     pins, 1         side 2
+        i2s_pio_code[11] = pio_encode_set(pio_src_dest::pio_x, bit_depth_value) | pio_encode_sideset(3, 7) | pio_encode_delay(1);  // 12: set    x, BIT_DEPTH-2  side 3 delay 1
 
         I2S_PIO_PROGRAM_LENGTH = 12;
     }
@@ -322,14 +315,11 @@ void I2S_CONTROLLER::start_i2s() {
 
     if(mode != I2S_CONTROLLER_MODE::RX) {
         new_buffer = i2s_settings[I2S_DMA_CHANNEL_TX].pattern_buffer->get_next_buffer(buffer_len);
-        last_buffer_len = buffer_len;
         dma_channel_transfer_from_buffer_now(I2S_DMA_CHANNEL_TX, new_buffer, buffer_len);
     }
     
     if(mode != I2S_CONTROLLER_MODE::TX) {
         puts("starting RX DMA");
-        // dma_channel_transfer_to_buffer_now(I2S_DMA_CHANNEL_RX, input_buffer, 4);
-        dma_channel_set_trans_count(I2S_DMA_CHANNEL_RX, 2, false);
-        dma_channel_set_write_addr(I2S_DMA_CHANNEL_RX, temporaerer_buffer[temporaerer_buffer_chooser], true);
+        dma_channel_transfer_to_buffer_now(I2S_DMA_CHANNEL_RX, temporaerer_buffer[temporaerer_buffer_chooser], 2);
     }
 }

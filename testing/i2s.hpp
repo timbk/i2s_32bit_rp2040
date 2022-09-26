@@ -111,8 +111,8 @@ public:
 };
 
 enum I2S_CONTROLLER_MODE {
-    TX = 0,  // for DAC only
-    RX = 1,  // for ADC only
+    TX  = 0, // for DAC only
+    RX  = 1, // for ADC only
     TRX = 2, // for ADC & DAC
 };
 

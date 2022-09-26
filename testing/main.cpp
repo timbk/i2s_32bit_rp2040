@@ -25,8 +25,8 @@ int main(void) {
     gpio_put(LED_PIN, 0); 
 
     // create i2s instance
-    I2S_CONTROLLER i2s_tx(PATTERN_BUFFER_SIZE, PIN_I2S_DOUT, PIN_I2S_CLOCK_BASE, I2S_CONTROLLER_MODE::RX, 32);
-    i2s_tx.set_pattern(PATTERN_BUFFER::PATTERN::CONST, 1234, 0, 1);
+    I2S_CONTROLLER i2s_tx(PATTERN_BUFFER_SIZE, PIN_I2S_DOUT, PIN_I2S_CLOCK_BASE, I2S_CONTROLLER_MODE::TRX, 32);
+    i2s_tx.set_pattern(PATTERN_BUFFER::PATTERN::SQUARE, 0, 0x1000, 2);
 
     i2s_tx.start_i2s();
 
@@ -34,7 +34,7 @@ int main(void) {
         gpio_put(LED_PIN, (time_us_32() % 1000000) < 50000);
         // pio_sm_put_blocking(I2S_PIO, I2S_PIO_SM, (u++)%128 + 1000000);
 
-        i2s_tx.set_pattern(PATTERN_BUFFER::PATTERN::CONST, time_us_32()/10/1, 0, 1);
+        // i2s_tx.set_pattern(PATTERN_BUFFER::PATTERN::CONST, time_us_32(), 0, 1);
         // uint32_t value = pio_sm_get_blocking(pio0, );
         // printf("%X\n", value);
     }
